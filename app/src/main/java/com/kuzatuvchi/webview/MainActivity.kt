@@ -2,6 +2,7 @@ package com.kuzatuvchi.webview
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,12 +12,16 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -35,20 +40,31 @@ class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var menuContainer: LinearLayout
+    private lateinit var webContainer: FrameLayout
     private var currentAllowedHost: String = ""
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val mainContainer = LinearLayout(this)
-        mainContainer.orientation = LinearLayout.VERTICAL
+        // Immersive Mode
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            or View.SYSTEM_UI_FLAG_FULLSCREEN
+        )
+
+        val mainContainer = FrameLayout(this)
         mainContainer.setBackgroundColor(Color.parseColor("#060B12"))
 
+        // --- 1. THE NEXUS HUB (MENU SCREEN) ---
         menuContainer = LinearLayout(this)
         menuContainer.orientation = LinearLayout.VERTICAL
         menuContainer.gravity = Gravity.CENTER_HORIZONTAL
-        menuContainer.layoutParams = LinearLayout.LayoutParams(
+        menuContainer.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
@@ -57,7 +73,7 @@ class MainActivity : Activity() {
         val headerLayout = LinearLayout(this)
         headerLayout.orientation = LinearLayout.VERTICAL
         headerLayout.gravity = Gravity.CENTER
-        headerLayout.setPadding(0, 0, 0, 80)
+        headerLayout.setPadding(0, 0, 0, 60)
 
         val title = TextView(this)
         title.text = "NEXUS // MANGA"
@@ -68,7 +84,7 @@ class MainActivity : Activity() {
         headerLayout.addView(title)
 
         val subtitle = TextView(this)
-        subtitle.text = "DOMAIN SHIELD & AD-BLOCK ACTIVE"
+        subtitle.text = "UNIVERSAL SEARCH ACTIVE"
         subtitle.textSize = 10f
         subtitle.setTextColor(Color.parseColor("#8899A6"))
         subtitle.letterSpacing = 0.25f
@@ -76,6 +92,80 @@ class MainActivity : Activity() {
 
         menuContainer.addView(headerLayout)
 
+        // --- NEW: CYBERPUNK SEARCH BAR ---
+        val searchContainer = LinearLayout(this)
+        searchContainer.orientation = LinearLayout.HORIZONTAL
+        searchContainer.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(0, 0, 0, 50) }
+
+        val searchInput = EditText(this)
+        searchInput.layoutParams = LinearLayout.LayoutParams(0, 140, 1f)
+        searchInput.hint = "Enter URL or Search Manga..."
+        searchInput.setHintTextColor(Color.parseColor("#556677"))
+        searchInput.setTextColor(Color.WHITE)
+        searchInput.setPadding(40, 0, 40, 0)
+        searchInput.setSingleLine(true)
+        searchInput.imeOptions = EditorInfo.IME_ACTION_GO
+        
+        val searchBg = GradientDrawable()
+        searchBg.setColor(Color.parseColor("#0B131E"))
+        searchBg.cornerRadius = 8f
+        searchBg.setStroke(2, Color.parseColor("#1C3048"))
+        searchInput.background = searchBg
+
+        val searchBtn = TextView(this)
+        searchBtn.text = "GO"
+        searchBtn.textSize = 16f
+        searchBtn.setTextColor(Color.parseColor("#00E5FF"))
+        searchBtn.setTypeface(null, Typeface.BOLD)
+        searchBtn.gravity = Gravity.CENTER
+        
+        val searchBtnBg = GradientDrawable()
+        searchBtnBg.setColor(Color.parseColor("#060B12"))
+        searchBtnBg.cornerRadius = 8f
+        searchBtnBg.setStroke(2, Color.parseColor("#00E5FF"))
+        searchBtn.background = searchBtnBg
+        
+        val searchBtnParams = LinearLayout.LayoutParams(140, 140)
+        searchBtnParams.setMargins(20, 0, 0, 0)
+        searchBtn.layoutParams = searchBtnParams
+
+        searchContainer.addView(searchInput)
+        searchContainer.addView(searchBtn)
+        menuContainer.addView(searchContainer)
+
+        // Logic to execute search and hide keyboard
+        val executeSearch = {
+            val query = searchInput.text.toString().trim()
+            if (query.isNotEmpty()) {
+                // Hide Android Keyboard
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(searchInput.windowToken, 0)
+                
+                // Determine if URL or Google Search
+                val finalUrl = if (query.startsWith("http://") || query.startsWith("https://")) {
+                    query
+                } else if (query.contains(".") && !query.contains(" ")) {
+                    "https://$query"
+                } else {
+                    "https://www.google.com/search?q=${Uri.encode(query)}"
+                }
+                openSite(finalUrl)
+                searchInput.text.clear()
+            }
+        }
+
+        searchBtn.setOnClickListener { executeSearch() }
+        searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO) {
+                executeSearch()
+                true
+            } else false
+        }
+
+        // --- QUICK ACCESS BUTTONS ---
         val mangaSites = mapOf(
             "COMIX.TO" to "https://comix.to/",
             "COMICK.APP" to "https://comick.app",
@@ -157,15 +247,53 @@ class MainActivity : Activity() {
             btnContainer.setOnClickListener { openSite(siteUrl) }
             buttonList.addView(btnContainer)
         }
-
         menuContainer.addView(scrollView)
 
-        webView = WebView(this)
-        webView.layoutParams = LinearLayout.LayoutParams(
+        // --- 2. WEB READER SCREEN (WITH FLOATING MENU BUTTON) ---
+        webContainer = FrameLayout(this)
+        webContainer.layoutParams = FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        webView.visibility = View.GONE
+        webContainer.visibility = View.GONE
+
+        webView = WebView(this)
+        webView.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        
+        val floatingMenuBtn = TextView(this)
+        floatingMenuBtn.text = "✦ MENU"
+        floatingMenuBtn.textSize = 12f
+        floatingMenuBtn.setTextColor(Color.parseColor("#00E5FF"))
+        floatingMenuBtn.setTypeface(null, Typeface.BOLD)
+        floatingMenuBtn.letterSpacing = 0.1f
+        
+        val fabBg = GradientDrawable()
+        fabBg.setColor(Color.parseColor("#CC060B12")) 
+        fabBg.cornerRadius = 50f
+        fabBg.setStroke(2, Color.parseColor("#00E5FF"))
+        floatingMenuBtn.background = fabBg
+        floatingMenuBtn.setPadding(50, 25, 50, 25)
+        
+        val fabParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        fabParams.gravity = Gravity.BOTTOM or Gravity.END 
+        fabParams.setMargins(0, 0, 60, 60)
+        floatingMenuBtn.layoutParams = fabParams
+
+        floatingMenuBtn.setOnClickListener { returnToMenu() }
+        
+        floatingMenuBtn.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.9f).scaleY(0.9f).setDuration(100).start()
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+            }
+            false
+        }
 
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.settings.apply {
@@ -194,13 +322,19 @@ class MainActivity : Activity() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url.toString()
                 if (!url.startsWith("http://") && !url.startsWith("https://")) return true
-
+                
                 val targetHost = request?.url?.host?.lowercase()?.removePrefix("www.") ?: ""
                 val isSameSite = currentAllowedHost.isNotEmpty() &&
                     (targetHost == currentAllowedHost || targetHost.endsWith(".$currentAllowedHost"))
                 val isCloudflare = targetHost.contains("cloudflare.com")
+                val isGoogleSearch = currentAllowedHost == "google.com"
 
                 if (!isSameSite && !isCloudflare) {
+                    // NEW: If you click a link inside Google, allow the jump and lock onto the new site!
+                    if (isGoogleSearch) {
+                        currentAllowedHost = targetHost
+                        return false
+                    }
                     Toast.makeText(this@MainActivity, "🛡️ Ad Redirect Blocked", Toast.LENGTH_SHORT).show()
                     return true
                 }
@@ -209,20 +343,28 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                val adKillerJs = """
+                val immersiveJs = """
                     (function() {
                         window.open = function() { return null; };
                         var style = document.createElement('style');
-                        style.innerHTML = 'iframe:not([src*="cloudflare"]), ins, .adsbygoogle, [id^="ad_"], [id^="ads_"], [class*="ad-banner"], [class*="popup"], div[style*="z-index: 2147483647"], div[style*="z-index: 99999"] { display: none !important; opacity: 0 !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }';
+                        style.innerHTML = `
+                            iframe:not([src*="cloudflare"]), ins, .adsbygoogle, [id^="ad_"], [id^="ads_"], [class*="ad-banner"], [class*="popup"], div[style*="z-index: 2147483647"] { display: none !important; opacity: 0 !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }
+                            header, footer, nav, .navbar, .header, .footer, #comments, .comments-area, #disqus_thread, .sidebar { display: none !important; }
+                            body, html { background-color: #000000 !important; color: #555 !important; }
+                            .reading-content, .page-break, .viewer-dir, .container { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+                        `;
                         document.head.appendChild(style);
                     })();
                 """.trimIndent()
-                view?.evaluateJavascript(adKillerJs, null)
+                view?.evaluateJavascript(immersiveJs, null)
             }
         }
 
+        webContainer.addView(webView)
+        webContainer.addView(floatingMenuBtn) 
+
         mainContainer.addView(menuContainer)
-        mainContainer.addView(webView)
+        mainContainer.addView(webContainer)
         setContentView(mainContainer)
     }
 
@@ -237,12 +379,12 @@ class MainActivity : Activity() {
             .withEndAction { menuContainer.visibility = View.GONE }
             .start()
 
-        webView.alpha = 0f
-        webView.translationX = 200f
-        webView.visibility = View.VISIBLE
+        webContainer.alpha = 0f
+        webContainer.translationX = 200f
+        webContainer.visibility = View.VISIBLE
         webView.loadUrl(url)
 
-        webView.animate()
+        webContainer.animate()
             .alpha(1f)
             .translationX(0f)
             .setDuration(400)
@@ -250,28 +392,32 @@ class MainActivity : Activity() {
             .start()
     }
 
+    private fun returnToMenu() {
+        currentAllowedHost = ""
+        webContainer.animate()
+            .alpha(0f)
+            .translationX(200f)
+            .setDuration(350)
+            .withEndAction {
+                webContainer.visibility = View.GONE
+                webView.loadUrl("about:blank")
+
+                menuContainer.visibility = View.VISIBLE
+                menuContainer.translationX = -200f
+                menuContainer.animate()
+                    .alpha(1f)
+                    .translationX(0f)
+                    .setDuration(400)
+                    .start()
+            }.start()
+    }
+
     override fun onBackPressed() {
-        if (webView.visibility == View.VISIBLE) {
+        if (webContainer.visibility == View.VISIBLE) {
             if (webView.canGoBack()) {
                 webView.goBack()
             } else {
-                currentAllowedHost = ""
-                webView.animate()
-                    .alpha(0f)
-                    .translationX(200f)
-                    .setDuration(350)
-                    .withEndAction {
-                        webView.visibility = View.GONE
-                        webView.loadUrl("about:blank")
-
-                        menuContainer.visibility = View.VISIBLE
-                        menuContainer.translationX = -200f
-                        menuContainer.animate()
-                            .alpha(1f)
-                            .translationX(0f)
-                            .setDuration(400)
-                            .start()
-                    }.start()
+                returnToMenu()
             }
         } else {
             super.onBackPressed()
