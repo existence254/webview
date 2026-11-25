@@ -1,4 +1,4 @@
-package com.example.mangabrowser
+package com.qurbonsaid.webview
 
 import android.annotation.SuppressLint
 import android.os.Bundle
